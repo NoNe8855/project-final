@@ -1,8 +1,84 @@
-spring.cache.type: none
+app:
+  host-url: http://localhost:8081 # Можно использовать другой порт для тестового сервера, если нужно
+  test-mail: test-jira4jr@example.com # Конкретное значение для тестов
+  templates-update-cache: 0s # Отключить кеширование шаблонов для тестов, чтобы изменения подхватывались сразу
+  mail-sending-props:
+    core-pool-size: 1 # Меньше потоков для тестов
+    max-pool-size: 5
+
 spring:
+  # --- SQL Init / Liquibase ---
+  # Если Liquibase должен работать для тестов и настраивать тестовую БД:
+  liquibase:
+    changeLog: "classpath:db/changelog.sql"
+    enabled: true
+  # Если используешь schema-test.sql / data-test.sql:
+  sql:
   init:
     mode: always
+    init:
+     mode: always
+
+  # --- JPA / Hibernate ---
+  jpa:
+    show-sql: true # Полезно для отладки тестов
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate # Важно! Если Liquibase/Flyway управляет схемой, то 'validate' или 'none'.
+      # Если хочешь, чтобы Hibernate создавал схему для тестов (и Liquibase отключен для тестов), то 'create-drop'.
+    properties:
+      hibernate:
+        format_sql: true
+        default_batch_fetch_size: 20
+        jdbc.batch_size: 20
+
+  # --- Datasource (КРИТИЧЕСКИ ВАЖНО для тестов) ---
   datasource:
     url: jdbc:postgresql://localhost:5433/jira-test
     username: jira
     password: JiraRush
+    driver-class-name: org.postgresql.Driver
+
+
+
+
+  cache:
+    type: none # Отключаем кэш для предсказуемости и изоляции тестов
+
+  # --- OAuth2 Client Registrations ---
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: test-github-client-id # Моковое/тестовое значение
+            client-secret: test-github-client-secret
+            scope:
+              - email
+          google:
+            client-id: test-google-client-id
+            client-secret: test-google-client-secret
+            scope:
+              - email
+              - profile
+          gitlab:
+            client-id: test-gitlab-client-id
+            client-secret: test-gitlab-client-secret
+            client-name: GitLab # Это может быть не нужно, если Spring Boot сам определяет по registrationId
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            authorization-grant-type: authorization_code
+            scope: read_user
+
+
+
+  mail:
+    host: localhost
+    port: 3025
+    username: testuser@example.com
+    password: testpassword
+    properties:
+      mail:
+        smtp:
+          starttls:
+            enable: false
+          auth: false
