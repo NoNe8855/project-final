@@ -147,7 +147,7 @@
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>test</scope> <!-- Обычно H2 нужна только для тестов -->
+            <scope>test</scope>
         </dependency>
     </dependencies>
 

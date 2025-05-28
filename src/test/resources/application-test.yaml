@@ -1,84 +1,84 @@
-app:
-  host-url: http://localhost:8081 # Можно использовать другой порт для тестового сервера, если нужно
-  test-mail: test-jira4jr@example.com # Конкретное значение для тестов
-  templates-update-cache: 0s # Отключить кеширование шаблонов для тестов, чтобы изменения подхватывались сразу
-  mail-sending-props:
-    core-pool-size: 1 # Меньше потоков для тестов
-    max-pool-size: 5
-
 spring:
-  # --- SQL Init / Liquibase ---
-  # Если Liquibase должен работать для тестов и настраивать тестовую БД:
+  # --- LIQUIBASE для H2 ---
   liquibase:
-    changeLog: "classpath:db/changelog.sql"
+    changeLog: "classpath:db/changelog-test.sql" # Путь к H2-совместимому Liquibase changelog файлу
     enabled: true
-  # Если используешь schema-test.sql / data-test.sql:
-  sql:
-  init:
-    mode: always
-    init:
-     mode: always
+    # Явно указываем параметры подключения для Liquibase, чтобы он не зависел от основного DataSource
+    # и чтобы быть уверенным, что он использует именно H2.
+    url: jdbc:h2:mem:jiradTestDB;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
+    user: sa
+    password:
 
-  # --- JPA / Hibernate ---
+  # --- SPRING BOOT SQL INITIALIZER ОТКЛЮЧЕН ---
+  sql:
+    init:
+      mode: always
+      schema-locations: # ОСТАВИТЬ ПУСТЫМ ИЛИ УДАЛИТЬ! Схему создает Liquibase!
+      data-locations: "classpath:data-test.sql" # <-- Путь к твоему H2-совместимому файлу с INSERT'ами
+      # Он должен лежать в src/test/resources/data-test.sql
+      # Если он в src/test/resources/db/data-test.sql, то путь "classpath:db/data
+
+  # --- JPA для H2 ---
   jpa:
-    show-sql: true # Полезно для отладки тестов
-    open-in-view: false
+    show-sql: true
+    open-in-view: false # Рекомендуется
     hibernate:
-      ddl-auto: validate # Важно! Если Liquibase/Flyway управляет схемой, то 'validate' или 'none'.
-      # Если хочешь, чтобы Hibernate создавал схему для тестов (и Liquibase отключен для тестов), то 'create-drop'.
+      ddl-auto: validate # Liquibase из changelog-test.sql создает схему, Hibernate ее проверяет
     properties:
       hibernate:
         format_sql: true
-        default_batch_fetch_size: 20
-        jdbc.batch_size: 20
+        # default_batch_fetch_size и jdbc.batch_size можно оставить, если нужны
+    database-platform: org.hibernate.dialect.H2Dialect # Явно указываем диалект для H2
 
-  # --- Datasource (КРИТИЧЕСКИ ВАЖНО для тестов) ---
+  # --- H2 DataSource (для DataSourceConfig.java, если он используется для создания бина DataSource для тестов) ---
   datasource:
-    url: jdbc:postgresql://localhost:5433/jira-test
-    username: jira
-    password: JiraRush
-    driver-class-name: org.postgresql.Driver
+    h2: # Префикс для DataSourceConfig
+      url: jdbc:h2:mem:jiradTestDB;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
+      username: sa
+      password:
+      driver-class-name: org.h2.Driver # H2 драйвер
 
-
-
-
+  # --- Cache ---
   cache:
-    type: none # Отключаем кэш для предсказуемости и изоляции тестов
+    type: none
 
-  # --- OAuth2 Client Registrations ---
+  # --- OAuth2 (тестовые значения) ---
   security:
     oauth2:
       client:
         registration:
           github:
-            client-id: test-github-client-id # Моковое/тестовое значение
-            client-secret: test-github-client-secret
-            scope:
-              - email
+            client-id: test-github-id
+            client-secret: test-github-secret
+            # ...
           google:
-            client-id: test-google-client-id
-            client-secret: test-google-client-secret
-            scope:
-              - email
-              - profile
+            client-id: test-google-id
+            client-secret: test-google-secret
+            # ...
           gitlab:
-            client-id: test-gitlab-client-id
-            client-secret: test-gitlab-client-secret
-            client-name: GitLab # Это может быть не нужно, если Spring Boot сам определяет по registrationId
-            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
-            authorization-grant-type: authorization_code
-            scope: read_user
+            client-id: test-gitlab-id
+            client-secret: test-gitlab-secret
+            # ...
 
-
-
+  # --- Mail (тестовые значения) ---
   mail:
     host: localhost
     port: 3025
     username: testuser@example.com
     password: testpassword
     properties:
-      mail:
-        smtp:
-          starttls:
-            enable: false
-          auth: false
+      mail.smtp.auth: false
+      mail.smtp.starttls.enable: false
+
+  # --- H2 Console ---
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+# --- App-specific properties for tests (если отличаются от основного) ---
+app:
+  host-url: http://localhost:8081 # Можно использовать другой порт для тестов
+  test-mail: test-jira4jr@example.com
+  templates-update-cache: 0s
+  # mail-sending-props: можно оставить из основного или переопределить

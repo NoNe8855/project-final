@@ -1,39 +1,55 @@
-#  https://docs.spring.io/spring-boot/docs/current/reference/html/common-application-properties.html
 app:
   host-url: http://localhost:8080
-  test-mail: ${APP_TEST_MAIL:jira4jr@gmail.com}
-  templates-update-cache: 5s
+  test-mail: ${APP_TEST_MAIL:jira4jr@gmail.com} # Это свойство может быть специфично для тестов,
+
+  # Если оно нужно, оставь, но для продакшена лучше через переменные окружения.
+  templates-update-cache: 5s # Для продакшена это значение может быть больше или кеширование отключено иначе
   mail-sending-props:
     core-pool-size: 8
     max-pool-size: 100
 
 spring:
-  init:
-    mode: never
+  # --- JPA / Hibernate для PostgreSQL ---
   jpa:
-    show-sql: true
-    open-in-view: false
-
-    # validate db by model
+    show-sql: true # Для отладки; в продакшене обычно false
+    open-in-view: false # Хорошая практика
     hibernate:
-      ddl-auto: validate
-
+      ddl-auto: validate # PostgreSQL схема управляется Liquibase, Hibernate только проверяет
     properties:
-      #  http://docs.jboss.org/hibernate/orm/5.3/userguide/html_single/Hibernate_User_Guide.html#configurations
       hibernate:
         format_sql: true
         default_batch_fetch_size: 20
-        # https://stackoverflow.com/questions/21257819/what-is-the-difference-between-hibernate-jdbc-fetch-size-and-hibernate-jdbc-batc
         jdbc.batch_size: 20
+        # Для PostgreSQL может понадобиться явно указать диалект, хотя Spring Boot обычно справляется
+        # dialect: org.hibernate.dialect.PostgreSQLDialect 
+
+  # --- PostgreSQL Datasource (для DataSourceConfig.java) ---
   datasource:
-    url: ${APP_DATASOURCE_URL:jdbc:postgresql://localhost:5432/jira}
-    username: ${APP_DATASOURCE_USERNAME}
-    password: ${APP_DATASOURCE_PASSWORD}
+    postgres: # Префикс для кастомного бина DataSource из DataSourceConfig.java
+      url: ${APP_DATASOURCE_URL:jdbc:postgresql://localhost:5432/jira}
+      username: ${APP_DATASOURCE_USERNAME}
+      password: ${APP_DATASOURCE_PASSWORD}
+      driver-class-name: org.postgresql.Driver # Явно указываем драйвер
 
+  # --- Liquibase для PostgreSQL ---
   liquibase:
-    changeLog: "classpath:db/changelog.sql"
+    changeLog: "classpath:db/changelog.sql"  # Основной Liquibase changelog для PostgreSQL
+    enabled: true                           # Liquibase включен для основного приложения
+    # Для основного приложения не нужно указывать liquibase.url, user, password здесь,
+    # так как Liquibase должен использовать основной DataSource бин,
+    # который будет создан из spring.datasource.postgres.* твоим DataSourceConfig.java.
+    # Убедись, что postgresDataSource бин в DataSourceConfig помечен @Primary (или является единственным не-тестовым).
 
-  # Jackson Fields Serialization
+  # --- Spring Boot SQL Initializer ---
+  sql:
+    init:
+      mode: never # <--- ПОЛНОСТЬЮ ОТКЛЮЧАЕМ для основного профиля,
+        #      так как Liquibase управляет схемой.
+        #      Если нужны начальные данные через data.sql (НЕ Liquibase),
+        #      тогда здесь будет 'always'/'embedded' и 'data-locations',
+      #      а 'schema-locations' должен быть пуст.
+
+  # --- Jackson ---
   jackson:
     visibility:
       field: any
@@ -41,11 +57,13 @@ spring:
       setter: none
       is-getter: none
 
-  # https://docs.spring.io/spring-boot/docs/current/reference/html/appendix-application-properties.html#common-application-properties-cache
+  # --- Cache ---
   cache:
     cache-names: users
-    caffeine.spec: maximumSize=10000,expireAfterAccess=5m
+    caffeine:
+      spec: maximumSize=10000,expireAfterAccess=5m # Настройки кеша могут быть другими для продакшена
 
+  # --- OAuth2 ---
   security:
     oauth2:
       client:
@@ -61,20 +79,6 @@ spring:
             scope:
               - email
               - profile
-            #         vk:
-            #           client-id: 51562377
-            #          client-secret: jNM1YHQy1362Mqs49wUN
-            #         client-name: Vkontakte
-            #        redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
-            #       client-authentication-method: client_secret_post
-            #      authorization-grant-type: authorization_code
-            #     scope: email
-            # yandex:
-            #  client-id: 2f3395214ba84075956b76a34b231985
-            # client-secret: ed236c501e444a609b0f419e5e88f1e1
-            #client-name: Yandex
-            # redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
-            # authorization-grant-type: authorization_code
           gitlab:
             client-id: ${APP_OAUTH_GITLAB_CLIENT_ID}
             client-secret: ${APP_OAUTH_GITLAB_CLIENT_SECRET}
@@ -83,55 +87,55 @@ spring:
             authorization-grant-type: authorization_code
             scope: read_user
         provider:
-          #        vk:
-          #         authorization-uri: https://oauth.vk.com/authorize
-          #        token-uri: https://oauth.vk.com/access_token
-          #       user-info-uri: https://api.vk.com/method/users.get?v=8.1
-          #      user-name-attribute: response
-          #   yandex:
-          #    authorization-uri: https://oauth.yandex.ru/authorize
-          #   token-uri: https://oauth.yandex.ru/token
-          #  user-info-uri: https://login.yandex.ru/info
-          # user-name-attribute: login
-          gitlab:
+          gitlab: # GitHub и Google провайдеры обычно не требуют явной конфигурации здесь
             authorization-uri: https://gitlab.com/oauth/authorize
             token-uri: https://gitlab.com/oauth/token
             user-info-uri: https://gitlab.com/api/v4/user
             user-name-attribute: email
 
-  sql:
-    init:
-      mode: always
-
+  # --- Mail ---
   mail:
+    host: ${APP_MAIL_HOST:smtp.gmail.com}
+    port: ${APP_MAIL_PORT:587}
+    username: ${APP_MAIL_USERNAME}
+    password: ${APP_MAIL_PASSWORD}
     properties:
       mail:
         smtp:
           starttls:
-            enable: true
-          auth: true
-    host: ${APP_MAIL_HOST:smtp.gmail.com}
-    username: ${APP_MAIL_USERNAME}
-    password: ${APP_MAIL_PASSWORD}
-    port: ${APP_MAIL_PORT:587}
-  thymeleaf.check-template-location: false
+            enable: true # или ${APP_MAIL_SMTP_STARTTLS_ENABLE:true}
+          auth: true     # или ${APP_MAIL_SMTP_AUTH:true}
 
-  mvc.throw-exception-if-no-handler-found: true
-  web.resources.add-mappings: false
+  # --- Thymeleaf ---
+  thymeleaf:
+    check-template-location: false # В продакшене обычно true, или настроено иначе
+    cache: true                    # В продакшене обычно true для кеширования шаблонов
+    # У тебя было app.templates-update-cache, это для dev-режима Thymeleaf
 
+  # --- MVC ---
+  mvc:
+    throw-exception-if-no-handler-found: true
+  web:
+    resources:
+      add-mappings: false # Обычно true, если используешь статические ресурсы Spring Boot
+
+# --- Logging ---
 logging:
   level:
-    root: WARN
-    com.javarush.jira: DEBUG
-    com.javarush.jira.common.config.MvcConfig: WARN
-    org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver: DEBUG
+    root: WARN # Для продакшена WARN или INFO
+    com.javarush.jira: INFO # или WARN для продакшена
+    # org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver: DEBUG # Для отладки
 
+# --- Server ---
 server:
-  #  https://springdoc.org/index.html#how-can-i-deploy-springdoc-openapi-ui-behind-a-reverse-proxy
-  forward-headers-strategy: framework
+  forward-headers-strategy: framework # Если за реверс-прокси
   servlet:
     encoding:
-      charset: UTF-8 # Charset of HTTP requests and responses. Added to the "Content-Type" header if not set explicitly
-      enabled: true # Enable http encoding support
+      charset: UTF-8
+      enabled: true
       force: true
-springdoc.swagger-ui.path: /doc
+
+# --- Springdoc OpenAPI ---
+springdoc:
+  swagger-ui:
+    path: /doc
